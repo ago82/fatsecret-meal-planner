@@ -1,0 +1,76 @@
+import json
+import requests
+from requests_oauthlib import OAuth1
+from datetime import date, timedelta
+
+CONSUMER_KEY = "3df3703445594d26a5059eabe2fab6f2"
+CONSUMER_SECRET = "7e25fc5768e5498ab613455470ccffa1"
+
+TOKEN_FILE = r"D:\Il mio Drive\Il mio Drive\2 Areas\Automation\FatSecrets\fatsecret_token.json"
+
+MENU = {
+    0: [("36088308", "lunch"),   # Pr. Lav (Lun, Gio)
+        ("44876698", "dinner")], # Cena WO (Lun)
+
+    1: [("36088362", "lunch"),   # Pr. Hamburger (Mar)
+        ("36088760", "dinner")], # Cena calcetto (Mar)
+
+    2: [("36088605", "lunch"),   # Pr. Fagioli (Mer)
+        ("46007550", "dinner")], # Cena (Mer)
+
+    3: [("36088308", "lunch"),   # Pr. Lav (Lun, Gio)
+        ("36088980", "dinner")], # Cena WO (Gio)
+
+    4: [("44888708", "lunch"),   # Pr. Yogurt/Pollo (Ven)
+        ("44887245", "dinner")], # Cena Salmone (Ven)
+
+    5: [("44888758", "lunch"),   # Pr. Yogurt/Lenticchie (Sab)
+        ("37019234", "dinner")], # Cena Pizza (sab&dom)
+
+    6: [("37022485", "lunch"),   # Pranzo della Domenica (Dom)
+        ("37019234", "dinner"),  # Cena Pizza (sab&dom)
+        ("36888847", "other")],  # Panino con nutella (Dom)
+}
+
+def days_since_epoch(d):
+    return (d - date(1970, 1, 1)).days
+
+with open(TOKEN_FILE) as f:
+    token_data = json.load(f)
+
+auth = OAuth1(
+    CONSUMER_KEY, CONSUMER_SECRET,
+    token_data["token"], token_data["secret"]
+)
+
+# Calcola il lunedì della prossima settimana
+# Funziona qualsiasi giorno tu lo lanci: compila sempre lun-dom della settimana successiva
+today = date.today()
+days_to_monday = (7 - today.weekday()) % 7 or 7
+next_monday = today + timedelta(days=days_to_monday)
+
+print(f"Compilo la settimana dal {next_monday} al {next_monday + timedelta(days=6)}\n")
+
+for day_offset, meals in MENU.items():
+    target_date = next_monday + timedelta(days=day_offset)
+    date_int = days_since_epoch(target_date)
+
+    for meal_id, meal_type in meals:
+        response = requests.get(
+            "https://platform.fatsecret.com/rest/server.api",
+            params={
+                "method": "food_entries.copy_saved_meal",
+                "saved_meal_id": meal_id,
+                "meal": meal_type,
+                "date": date_int,
+                "format": "json"
+            },
+            auth=auth
+        )
+        result = response.json()
+        if "error" in result:
+            print(f"ERRORE {target_date} {meal_type}: {result['error']['message']}")
+        else:
+            print(f"OK {target_date} {meal_type} (meal_id: {meal_id})")
+
+input("\nPremi INVIO per chiudere...")
