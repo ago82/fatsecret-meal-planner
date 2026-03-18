@@ -1,4 +1,5 @@
 import json
+import sys
 import requests
 from requests_oauthlib import OAuth1
 from datetime import date, timedelta
@@ -6,7 +7,7 @@ from datetime import date, timedelta
 CONSUMER_KEY = "3df3703445594d26a5059eabe2fab6f2"
 CONSUMER_SECRET = "7e25fc5768e5498ab613455470ccffa1"
 
-TOKEN_FILE = r"D:\Il mio Drive\Il mio Drive\2 Areas\Automation\FatSecrets\fatsecret_token.json"
+TOKEN_FILE = r"D:\Il mio Drive\Il mio Drive\2 Areas\Automation\fatsecret-meal-planner\fatsecret_token.json"
 
 MENU = {
     0: [("36088308", "lunch"),   # Pr. Lav (Lun, Gio)
@@ -35,6 +36,34 @@ MENU = {
 def days_since_epoch(d):
     return (d - date(1970, 1, 1)).days
 
+def monday_has_entries(auth, monday):
+    """Controlla se il lunedì indicato ha già pasti inseriti su FatSecret."""
+    date_int = days_since_epoch(monday)
+    response = requests.get(
+        "https://platform.fatsecret.com/rest/server.api",
+        params={
+            "method": "food_entries.get",
+            "date": date_int,
+            "format": "json"
+        },
+        auth=auth
+    )
+    result = response.json()
+    # Se c'è almeno una voce, il giorno è già compilato
+    food_entries = result.get("food_entries", {})
+    return bool(food_entries.get("food_entry"))
+
+# ── Presentazione ─────────────────────────────────────────────────────────────
+print("=" * 55)
+print("         COMPILA DIETA - FatSecret Meal Planner")
+print("=" * 55)
+print()
+print("Questo script inserisce automaticamente i pasti della")
+print("prossima settimana (lun-dom) su FatSecret, copiando i")
+print("saved meal predefiniti per ogni giorno.")
+print()
+
+# ── Setup auth e calcolo settimana ────────────────────────────────────────────
 with open(TOKEN_FILE) as f:
     token_data = json.load(f)
 
@@ -48,8 +77,30 @@ auth = OAuth1(
 today = date.today()
 days_to_monday = (7 - today.weekday()) % 7 or 7
 next_monday = today + timedelta(days=days_to_monday)
+week_end = next_monday + timedelta(days=6)
 
-print(f"Compilo la settimana dal {next_monday} al {next_monday + timedelta(days=6)}\n")
+print(f"Settimana da compilare: {next_monday.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}")
+print()
+
+# ── Controllo preventivo: lunedì già compilato? ───────────────────────────────
+print("Controllo pasti già presenti su FatSecret...", end=" ", flush=True)
+if monday_has_entries(auth, next_monday):
+    print("ATTENZIONE!\n")
+    print(f"Il lunedì {next_monday.strftime('%d/%m/%Y')} ha già dei pasti inseriti.")
+    print("La settimana risulta già compilata. Operazione annullata.")
+    print()
+    input("Premi INVIO per chiudere...")
+    sys.exit(0)
+print("OK, settimana libera.\n")
+
+# ── Conferma utente ───────────────────────────────────────────────────────────
+risposta = input("Vuoi procedere con la compilazione? (s/n): ").strip().lower()
+if risposta != "s":
+    print("\nOperazione annullata dall'utente.")
+    input("Premi INVIO per chiudere...")
+    sys.exit(0)
+
+print(f"\nCompilo la settimana dal {next_monday} al {week_end}\n")
 
 for day_offset, meals in MENU.items():
     target_date = next_monday + timedelta(days=day_offset)
