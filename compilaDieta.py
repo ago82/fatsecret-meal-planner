@@ -50,7 +50,7 @@ def monday_has_entries(auth, monday):
     )
     result = response.json()
     # Se c'è almeno una voce, il giorno è già compilato
-    food_entries = result.get("food_entries", {})
+    food_entries = result.get("food_entries") or {}
     return bool(food_entries.get("food_entry"))
 
 # ── Presentazione ─────────────────────────────────────────────────────────────
